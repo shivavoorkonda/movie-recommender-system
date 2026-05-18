@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>CineAI - Hybrid Movie Recommender</title>
+  <meta name="description" content="AI-powered hybrid movie recommender using collaborative filtering and content-based filtering on MovieLens 100K."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+<!-- ── NAV ─────────────────────────────────────────────────────────────────── -->
+<nav class="navbar">
+  <div class="nav-brand">
+    <span class="brand-icon">🎬</span>
+    <span class="brand-name">Cine<span class="brand-ai">AI</span></span>
+  </div>
+  <div class="nav-links">
+    <a href="#" class="nav-link active" data-view="home">Home</a>
+    <a href="#" class="nav-link" data-view="explore">Explore</a>
+    <a href="#" class="nav-link" data-view="dashboard">Dashboard</a>
+    <a href="#" class="nav-link" data-view="about">About</a>
+  </div>
+  <div class="nav-search">
+    <div class="search-box">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="globalSearch" placeholder="Search movies..." autocomplete="off"/>
+      <div id="searchDropdown" class="search-dropdown hidden"></div>
+    </div>
+  </div>
+</nav>
+
+<!-- ── VIEWS ─────────────────────────────────────────────────────────────────── -->
+<main class="main-content">
+
+  <!-- HOME VIEW -->
+  <section id="view-home" class="view active">
+    <!-- Hero -->
+    <div class="hero">
+      <div class="hero-bg"></div>
+      <div class="hero-content">
+        <div class="hero-badge">Powered by Matrix Factorisation + TF-IDF</div>
+        <h1 class="hero-title">Discover Your Next<br/><span class="gradient-text">Favourite Film</span></h1>
+        <p class="hero-subtitle">A hybrid AI recommender system combining collaborative filtering (SVD-style matrix factorisation) and content-based filtering — the same approach used by Netflix.</p>
+        <div class="hero-actions">
+          <div class="user-selector-wrap">
+            <label>Enter User ID (1–943)</label>
+            <div class="input-row">
+              <input type="number" id="heroUserId" min="1" max="943" value="1" placeholder="User ID"/>
+              <button class="btn btn-primary" onclick="App.loadUserView()">Get Recommendations</button>
+            </div>
+          </div>
+        </div>
+        <div class="hero-stats" id="heroStats">
+          <div class="stat-pill"><span id="statRatings">-</span><small>Ratings</small></div>
+          <div class="stat-pill"><span id="statUsers">-</span><small>Users</small></div>
+          <div class="stat-pill"><span id="statMovies">-</span><small>Movies</small></div>
+          <div class="stat-pill"><span id="statAvg">-</span><small>Avg Rating</small></div>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="floating-cards">
+          <div class="f-card c1">🎭 Drama</div>
+          <div class="f-card c2">🚀 Sci-Fi</div>
+          <div class="f-card c3">🔍 Thriller</div>
+          <div class="f-card c4">😂 Comedy</div>
+          <div class="f-card c5">💘 Romance</div>
+          <div class="f-card c6">🎬 Action</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Popular Movies Row -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">🔥 Most Popular</h2>
+        <span class="section-sub">Bayesian-weighted top picks from 100K ratings</span>
+      </div>
+      <div id="popularRow" class="movie-row"><div class="loader-row"></div></div>
+    </section>
+
+    <!-- User Recommendations Panel -->
+    <section class="section" id="userSection" style="display:none">
+      <div class="section-header">
+        <h2 class="section-title">✨ Your Recommendations</h2>
+        <div class="tab-group">
+          <button class="tab active" data-tab="hybrid">Hybrid</button>
+          <button class="tab" data-tab="cf">Collaborative</button>
+          <button class="tab" data-tab="cb">Content-Based</button>
+        </div>
+      </div>
+      <!-- Alpha slider -->
+      <div class="alpha-control">
+        <label>CF weight (alpha): <strong id="alphaVal">0.7</strong></label>
+        <input type="range" id="alphaSlider" min="0" max="1" step="0.05" value="0.7"
+               oninput="document.getElementById('alphaVal').textContent=this.value"/>
+        <span class="alpha-hint">0 = pure content-based &nbsp;|&nbsp; 1 = pure collaborative</span>
+      </div>
+      <div id="recRow" class="movie-row"></div>
+      <!-- User history -->
+      <div class="section-header" style="margin-top:2rem">
+        <h2 class="section-title">📋 Your Rating History</h2>
+        <span class="section-sub" id="historyMeta"></span>
+      </div>
+      <div id="historyRow" class="movie-row"></div>
+    </section>
+  </section>
+
+  <!-- EXPLORE VIEW -->
+  <section id="view-explore" class="view">
+    <div class="page-header">
+      <h1>Explore Movies</h1>
+      <p>Search for any movie and discover similar recommendations</p>
+    </div>
+    <div class="explore-search">
+      <input type="text" id="exploreSearch" placeholder="Search movie title..." class="explore-input"/>
+      <button class="btn btn-primary" onclick="App.exploreSearch()">Search</button>
+    </div>
+    <div id="exploreResults" class="movie-grid"></div>
+
+    <!-- Similar Movie Panel (shows after clicking a card) -->
+    <div id="similarPanel" class="similar-panel hidden">
+      <div class="section-header">
+        <h2 class="section-title" id="similarTitle">Similar Movies</h2>
+        <button class="btn btn-ghost" onclick="App.closeSimilar()">✕ Close</button>
+      </div>
+      <div id="similarRow" class="movie-row"></div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD VIEW -->
+  <section id="view-dashboard" class="view">
+    <div class="page-header">
+      <h1>📊 Model Dashboard</h1>
+      <p>Dataset statistics, model metrics, and genre analytics</p>
+    </div>
+    <div class="dashboard-grid" id="dashboardGrid">
+      <div class="dash-card span2" id="ratingDistCard">
+        <h3>Rating Distribution</h3>
+        <div id="ratingDistChart" class="bar-chart"></div>
+      </div>
+      <div class="dash-card" id="genreCard">
+        <h3>Top Genres</h3>
+        <div id="genreChart" class="genre-chart"></div>
+      </div>
+      <div class="dash-card" id="metricsCard">
+        <h3>Model Metrics</h3>
+        <div class="metrics-list">
+          <div class="metric-row"><span>Algorithm</span><strong>Matrix Factorisation SGD</strong></div>
+          <div class="metric-row"><span>Test RMSE</span><strong class="good">0.9361</strong></div>
+          <div class="metric-row"><span>Test MAE</span><strong class="good">0.7372</strong></div>
+          <div class="metric-row"><span>Precision@10</span><strong class="good">57.6%</strong></div>
+          <div class="metric-row"><span>Recall@10</span><strong class="good">71.4%</strong></div>
+          <div class="metric-row"><span>F1@10</span><strong class="good">63.8%</strong></div>
+          <div class="metric-row"><span>ILD (Diversity)</span><strong>0.210</strong></div>
+          <div class="metric-row"><span>Latent Factors</span><strong>100</strong></div>
+          <div class="metric-row"><span>Training Epochs</span><strong>20</strong></div>
+          <div class="metric-row"><span>Content Feature</span><strong>TF-IDF Bigrams</strong></div>
+        </div>
+      </div>
+      <div class="dash-card span3" id="topMoviesCard">
+        <h3>Most Rated Movies</h3>
+        <div id="topMoviesTable"></div>
+      </div>
+      <div class="dash-card span3">
+        <h3>How the Hybrid Engine Works</h3>
+        <div class="arch-diagram">
+          <div class="arch-box cf-box">
+            <div class="arch-icon">🤝</div>
+            <strong>Collaborative Filtering</strong>
+            <p>Matrix Factorisation via SGD. Learns user & movie latent factors. Predicts ratings based on similar users' behaviour.</p>
+            <code>R ≈ P · Qᵀ + biases</code>
+          </div>
+          <div class="arch-plus">+</div>
+          <div class="arch-box cb-box">
+            <div class="arch-icon">🎯</div>
+            <strong>Content-Based</strong>
+            <p>TF-IDF vectorises genre strings. Cosine similarity finds movies with matching feature profiles.</p>
+            <code>sim(A,B) = A·B / (|A||B|)</code>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-box hybrid-box">
+            <div class="arch-icon">⚡</div>
+            <strong>Hybrid Fusion</strong>
+            <p>Weighted blend: <code>α·CF + (1-α)·CB</code>. Alpha auto-reduces for new users (cold-start).</p>
+            <code>default α = 0.7</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABOUT VIEW -->
+  <section id="view-about" class="view">
+    <div class="page-header">
+      <h1>About This Project</h1>
+      <p>A full-stack hybrid movie recommender system built from scratch</p>
+    </div>
+    <div class="about-grid">
+      <div class="about-card">
+        <div class="about-icon">🧠</div>
+        <h3>Machine Learning</h3>
+        <p>Custom Matrix Factorisation trained via Stochastic Gradient Descent — the same maths behind Netflix's winning approach in the Netflix Prize. No external ML libraries for the core algorithm (pure NumPy).</p>
+        <div class="tech-tags">
+          <span>NumPy SGD</span><span>TF-IDF</span><span>Cosine Sim</span><span>scikit-learn</span>
+        </div>
+      </div>
+      <div class="about-card">
+        <div class="about-icon">🗄️</div>
+        <h3>Dataset</h3>
+        <p>MovieLens 100K from GroupLens Research — 100,000 ratings from 943 users on 1,682 movies. Matrix sparsity: 93.7%. Auto-downloaded on first run.</p>
+        <div class="tech-tags">
+          <span>MovieLens 100K</span><span>GroupLens</span><span>943 Users</span><span>1682 Movies</span>
+        </div>
+      </div>
+      <div class="about-card">
+        <div class="about-icon">⚙️</div>
+        <h3>Backend</h3>
+        <p>Flask REST API serving real-time recommendations from pre-trained models. Endpoints for hybrid, CF, CB, search, similar movies, user history, and statistics.</p>
+        <div class="tech-tags">
+          <span>Flask</span><span>Python 3.14</span><span>joblib</span><span>REST API</span>
+        </div>
+      </div>
+      <div class="about-card">
+        <div class="about-icon">🎨</div>
+        <h3>Frontend</h3>
+        <p>Responsive single-page application with dark mode, real-time search, interactive charts, alpha blending slider, and animated movie cards.</p>
+        <div class="tech-tags">
+          <span>Vanilla JS</span><span>CSS3</span><span>Responsive</span><span>SPA</span>
+        </div>
+      </div>
+      <div class="about-card span2">
+        <div class="about-icon">📁</div>
+        <h3>Project Structure</h3>
+        <pre class="code-tree">movie_recommender_system/
+├── src/
+│   ├── data_loader.py             # Download & preprocess MovieLens 100K
+│   ├── collaborative_filtering.py # Matrix Factorisation (SGD)
+│   ├── content_based.py           # TF-IDF + Cosine Similarity
+│   ├── hybrid_engine.py           # Weighted hybrid fusion
+│   ├── evaluator.py               # RMSE, MAE, Precision@K, Recall@K
+│   └── main.py                    # CLI pipeline entry point
+├── web/
+│   ├── app.py                     # Flask REST API (12 endpoints)
+│   ├── templates/index.html       # SPA frontend
+│   └── static/                    # CSS + JS assets
+├── tests/                         # 31 pytest unit tests
+├── data/processed/                # Cleaned CSVs
+└── models/saved/                  # Trained .pkl models</pre>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ── MOVIE DETAIL MODAL ──────────────────────────────────────────────────────── -->
+<div id="movieModal" class="modal hidden">
+  <div class="modal-overlay" onclick="App.closeModal()"></div>
+  <div class="modal-box">
+    <button class="modal-close" onclick="App.closeModal()">✕</button>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<!-- ── TOAST ──────────────────────────────────────────────────────────────────── -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
