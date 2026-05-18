@@ -65,13 +65,14 @@ function makeCard(m, mode) {
 
   const div = document.createElement('div');
   div.className = 'movie-card';
+  const displayTitle = m.title ? (m.year ? `${m.title} (${m.year})` : m.title) : 'Unknown';
   div.innerHTML = `
     <div class="card-poster" style="background:linear-gradient(135deg,${col}22,${col}44)">
       <div class="card-genre-bg" style="background:${col}"></div>
       <span style="font-size:3rem;position:relative;z-index:1">${emj}</span>
     </div>
     <div class="card-body">
-      <div class="card-title">${m.title || 'Unknown'}</div>
+      <div class="card-title">${displayTitle}</div>
       <div class="card-genres">${(m.genres||'').replace(/\|/g,' · ')}</div>
       <div class="card-score">${badge}</div>
     </div>`;
@@ -175,7 +176,8 @@ const App = {
         data.results.forEach(m => {
           const item = document.createElement('div');
           item.className = 'search-item';
-          item.innerHTML = `<div class="search-item-title">${genreEmoji(m.genres)} ${m.title}</div>
+          const itemTitle = m.title ? (m.year ? `${m.title} (${m.year})` : m.title) : 'Unknown';
+          item.innerHTML = `<div class="search-item-title">${genreEmoji(m.genres)} ${itemTitle}</div>
             <div class="search-item-meta">${(m.genres||'').replace(/\|/g,' · ')} ${m.avg_rating ? '· ★'+m.avg_rating : ''}</div>`;
           item.addEventListener('click', () => {
             drop.classList.add('hidden');
@@ -352,14 +354,17 @@ const App = {
     });
 
     // Top movies table
-    const tbody = s.top_rated_movies.map((m,i) => `
+    const tbody = s.top_rated_movies.map((m,i) => {
+      const titleYear = m.year ? ` (${m.year})` : '';
+      return `
       <tr>
         <td>${i+1}</td>
-        <td><strong>${m.title}</strong></td>
+        <td><strong>${m.title}${titleYear}</strong></td>
         <td style="color:#9090a8;font-size:0.8rem">${(m.genres||'').split('|').slice(0,2).join(' · ')}</td>
         <td><span class="stars">${stars(m.avg||0)}</span> ${(m.avg||0).toFixed(2)}</td>
         <td style="color:#9090a8">${(m.count||0).toLocaleString()}</td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
     document.getElementById('topMoviesTable').innerHTML = `
       <table><thead><tr><th>#</th><th>Title</th><th>Genres</th><th>Avg Rating</th><th>Ratings</th></tr></thead>
       <tbody>${tbody}</tbody></table>`;
