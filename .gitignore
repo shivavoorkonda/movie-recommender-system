@@ -22,7 +22,7 @@ data/raw/
 models/saved/*.pkl
 
 # Outputs (regenerated)
-outputs/plots/
+outputs/
 
 # Processed data (regenerated from raw)
 data/processed/

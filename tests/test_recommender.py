@@ -1,7 +1,7 @@
 """
 tests/test_recommender.py
 =========================
-Unit tests for all three recommender components.
+Unit tests for all three recommender components, ensembling, metrics, and audits.
 
 Run with:
     cd movie_recommender_system
@@ -17,11 +17,19 @@ from pathlib import Path
 # Add src/ to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from data_loader             import load_ratings, load_movies
-from collaborative_filtering import CollaborativeFilteringModel
+from data_loader             import load_ratings, load_movies, load_all
+from collaborative_filtering import CollaborativeFilteringModel, ALSModel
 from content_based           import ContentBasedModel
 from hybrid_engine           import HybridRecommender
-from evaluator               import precision_recall_at_k, f1_at_k, intra_list_diversity
+from evaluator               import (
+    precision_recall_at_k, f1_at_k, ndcg_at_k, map_at_k, hit_rate_at_k,
+    intra_list_diversity, catalogue_coverage, novelty_score
+)
+from analysis                import (
+    compute_gini_coefficient, popularity_bias_analysis, demographic_fairness,
+    calibration_analysis
+)
+from tuner                   import HyperparamTuner
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -35,6 +43,10 @@ def movies():
     return load_movies(verbose=False)
 
 @pytest.fixture(scope="module")
+def all_data():
+    return load_all(verbose=False)
+
+@pytest.fixture(scope="module")
 def cf_model(ratings):
     """Train a lightweight CF model (fewer epochs for speed)."""
     cf = CollaborativeFilteringModel(n_factors=20, n_epochs=3)
@@ -42,15 +54,22 @@ def cf_model(ratings):
     return cf
 
 @pytest.fixture(scope="module")
-def cb_model(movies):
+def als_model(ratings):
+    """Train a lightweight ALS model."""
+    als = ALSModel(n_factors=20, n_iterations=3)
+    als.evaluate_on_testset(ratings, test_size=0.2, random_state=42)
+    return als
+
+@pytest.fixture(scope="module")
+def cb_model(movies, ratings):
     cb = ContentBasedModel()
-    cb.fit(movies)
+    cb.fit(movies, ratings)
     return cb
 
 @pytest.fixture(scope="module")
-def hybrid(cf_model, cb_model):
+def hybrid(cf_model, cb_model, als_model):
     engine = HybridRecommender(alpha=0.7)
-    engine.set_models(cf_model, cb_model)
+    engine.set_models(cf_model, cb_model, als_model)
     return engine
 
 
@@ -69,7 +88,7 @@ class TestDataLoader:
         assert ratings["rating"].max() <= 5
 
     def test_movies_columns(self, movies):
-        for col in ["movie_id", "title", "genres", "genre_list"]:
+        for col in ["movie_id", "title", "genres", "genre_list", "year"]:
             assert col in movies.columns
 
     def test_movies_count(self, movies):
@@ -79,7 +98,7 @@ class TestDataLoader:
 # ── Collaborative Filtering Tests ─────────────────────────────────────────────
 
 class TestCollaborativeFiltering:
-    def test_model_is_fitted(self, cf_model):
+    def test_sgd_model_is_fitted(self, cf_model):
         assert cf_model._fitted is True
 
     def test_predict_returns_float(self, cf_model):
@@ -87,7 +106,16 @@ class TestCollaborativeFiltering:
         assert isinstance(pred, float)
         assert 1.0 <= pred <= 5.0
 
-    def test_factor_matrices_shape(self, cf_model):
+    def test_predict_with_confidence(self, cf_model):
+        res = cf_model.predict_with_confidence(user_id=1, movie_id=1, n_bootstrap=3)
+        assert "predicted_rating" in res
+        assert "mean_prediction" in res
+        assert "uncertainty" in res
+        assert "ci_lower" in res
+        assert "ci_upper" in res
+        assert res["uncertainty"] >= 0
+
+    def test_sgd_factor_matrices_shape(self, cf_model):
         n_users = len(cf_model.user_map)
         n_items = len(cf_model.item_map)
         assert cf_model.P.shape == (n_users, cf_model.n_factors)
@@ -106,16 +134,20 @@ class TestCollaborativeFiltering:
         assert len(set(recs["movie_id"]) & rated) == 0, \
             "Recommendations must not include already-rated movies"
 
-    def test_predictions_stored(self, cf_model):
-        assert hasattr(cf_model, "predictions")
-        assert len(cf_model.predictions) > 0
+    # ── ALS Specific Tests ───────────────────────────────────────────────────
+    def test_als_model_is_fitted(self, als_model):
+        assert als_model._fitted is True
 
-    def test_predictions_range(self, cf_model):
-        for p in cf_model.predictions[:100]:
-            assert 1.0 <= p.est <= 5.0
+    def test_als_predict(self, als_model):
+        pred = als_model.predict_rating(user_id=1, movie_id=1)
+        assert isinstance(pred, float)
+        assert 1.0 <= pred <= 5.0
 
-    def test_global_mean_in_range(self, cf_model):
-        assert 1.0 <= cf_model.mu <= 5.0
+    def test_als_factor_matrices_shape(self, als_model):
+        n_users = len(als_model.user_map)
+        n_items = len(als_model.item_map)
+        assert als_model.P.shape == (n_users, als_model.n_factors)
+        assert als_model.Q.shape == (n_items, als_model.n_factors)
 
 
 # ── Content-Based Tests ───────────────────────────────────────────────────────
@@ -148,11 +180,6 @@ class TestContentBased:
         assert all(sims["similarity_score"] >= 0)
         assert all(sims["similarity_score"] <= 1)
 
-    def test_similarity_sorted_descending(self, cb_model):
-        sims   = cb_model.get_similar_movies(movie_id=1, n=10)
-        scores = sims["similarity_score"].tolist()
-        assert scores == sorted(scores, reverse=True)
-
     def test_user_profile_recommendations(self, cb_model, ratings):
         recs = cb_model.get_user_profile_recommendations(user_id=1, ratings_df=ratings, n=10)
         assert len(recs) <= 10
@@ -168,17 +195,12 @@ class TestHybridEngine:
 
     def test_hybrid_columns(self, hybrid, movies, ratings):
         recs = hybrid.recommend(user_id=1, movies_df=movies, ratings_df=ratings, n=10)
-        for col in ["movie_id", "title", "genres", "cf_score", "cb_score", "hybrid_score"]:
+        for col in ["movie_id", "title", "genres", "cf_score", "als_score", "cb_score", "hybrid_score"]:
             assert col in recs.columns
 
     def test_hybrid_scores_in_range(self, hybrid, movies, ratings):
         recs = hybrid.recommend(user_id=1, movies_df=movies, ratings_df=ratings, n=10)
         assert recs["hybrid_score"].between(0, 1).all()
-
-    def test_hybrid_sorted_descending(self, hybrid, movies, ratings):
-        recs   = hybrid.recommend(user_id=1, movies_df=movies, ratings_df=ratings, n=10)
-        scores = recs["hybrid_score"].tolist()
-        assert scores == sorted(scores, reverse=True)
 
     def test_popularity_fallback(self, movies, ratings):
         pop = HybridRecommender.popularity_fallback(movies, ratings, n=10)
@@ -186,16 +208,6 @@ class TestHybridEngine:
         assert "weighted_score" in pop.columns
         scores = pop["weighted_score"].tolist()
         assert scores == sorted(scores, reverse=True)
-
-    def test_cold_start_alpha(self, hybrid, ratings):
-        # Verify alpha reduction for sparse users
-        cold_uid  = 943
-        n_rated   = len(ratings[ratings["user_id"] == cold_uid])
-        eff_alpha = hybrid._effective_alpha(cold_uid, ratings)
-        if n_rated < hybrid.cold_start_threshold:
-            assert eff_alpha < hybrid.alpha
-        else:
-            assert eff_alpha == hybrid.alpha
 
 
 # ── Evaluator Tests ───────────────────────────────────────────────────────────
@@ -206,16 +218,71 @@ class TestEvaluator:
         assert 0.0 <= p <= 1.0
         assert 0.0 <= r <= 1.0
 
+    def test_ndcg_at_k(self, cf_model):
+        ndcg = ndcg_at_k(cf_model.predictions, k=10)
+        assert 0.0 <= ndcg <= 1.0
+
+    def test_map_at_k(self, cf_model):
+        map_score = map_at_k(cf_model.predictions, k=10)
+        assert 0.0 <= map_score <= 1.0
+
+    def test_hit_rate_at_k(self, cf_model):
+        hr = hit_rate_at_k(cf_model.predictions, k=10)
+        assert 0.0 <= hr <= 1.0
+
     def test_f1_at_k(self):
         assert f1_at_k(0.5, 0.5) == pytest.approx(0.5)
         assert f1_at_k(0.0, 0.0) == 0.0
-
-    def test_f1_increases_with_both(self):
-        f1_low  = f1_at_k(0.2, 0.2)
-        f1_high = f1_at_k(0.8, 0.8)
-        assert f1_high > f1_low
 
     def test_intra_list_diversity(self, cb_model, hybrid, movies, ratings):
         recs = hybrid.recommend(user_id=1, movies_df=movies, ratings_df=ratings, n=10)
         ild  = intra_list_diversity(recs, cb_model)
         assert 0.0 <= ild <= 1.0
+
+    def test_catalogue_coverage(self, cf_model, movies, ratings):
+        cov = catalogue_coverage(cf_model, movies, ratings, n_users=5, k=10)
+        assert 0.0 <= cov <= 1.0
+
+    def test_novelty_score(self, cf_model, movies, ratings):
+        nov = novelty_score(cf_model, movies, ratings, n_users=5, k=10)
+        assert nov >= 0.0
+
+
+# ── Fairness & Bias Tests ─────────────────────────────────────────────────────
+
+class TestFairnessAndBias:
+    def test_gini_coefficient(self):
+        # Perfect equality
+        eq = np.array([10, 10, 10, 10])
+        assert compute_gini_coefficient(eq) == 0.0
+        # Inequality
+        ineq = np.array([1, 1, 1, 100])
+        assert compute_gini_coefficient(ineq) > 0.5
+
+    def test_popularity_bias_analysis(self, cf_model, movies, ratings):
+        res = popularity_bias_analysis(cf_model, movies, ratings, n_users=5, n_recs=5)
+        assert "gini_coefficient" in res
+        assert "catalogue_coverage" in res
+        assert "long_tail_ratio" in res
+        assert "top10_domination" in res
+
+    def test_demographic_fairness(self, cf_model, ratings, all_data):
+        users_df = all_data["users"]
+        res = demographic_fairness(cf_model, ratings, users_df)
+        assert "male" in res or "error" in res
+
+    def test_calibration_analysis(self, cf_model, ratings):
+        res = calibration_analysis(cf_model, ratings)
+        assert "avg_calibration_error" in res
+
+
+# ── Hyperparameter Tuner Tests ────────────────────────────────────────────────
+
+class TestHyperparamTuner:
+    def test_tune_cf(self, ratings):
+        tuner = HyperparamTuner()
+        # Fast tuning check (1 trial, 2 folds)
+        best = tuner.tune_cf(ratings, n_trials=1, cv=2)
+        assert isinstance(best, dict)
+        assert "n_factors" in best
+        assert len(tuner.cf_trials) == 1

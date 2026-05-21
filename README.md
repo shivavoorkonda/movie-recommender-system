@@ -1,172 +1,139 @@
-# CineAI — Hybrid Movie Recommender System
+# CineAI — Advanced Hybrid Movie Recommender System
 
-> **Full-Stack AI project** · Flask REST API + Dark-mode SPA Frontend · MovieLens 100K · Matrix Factorisation SGD + TF-IDF
+> **Portfolio-Grade ML Engineering Showcase** · Multi-Model Ensemble (SGD + ALS + TF-IDF) · Fairness & Popularity Bias Auditing · Interactive Model Comparison Suite · Flask REST API + Custom Dark-Mode Vanilla SPA
 
-![Python](https://img.shields.io/badge/Python-3.14-blue?logo=python) ![Flask](https://img.shields.io/badge/Flask-3.x-green?logo=flask) ![ML](https://img.shields.io/badge/ML-Matrix%20Factorisation-purple) ![Tests](https://img.shields.io/badge/Tests-31%20passed-success)
-
----
-
-## What This Project Does
-
-CineAI is a **hybrid movie recommender system** that combines two complementary ML techniques — just like Netflix does — to deliver personalised movie recommendations:
-
-| Method | Algorithm | What it learns |
-|--------|-----------|----------------|
-| **Collaborative Filtering** | Matrix Factorisation (SGD) | User taste from shared rating patterns |
-| **Content-Based** | TF-IDF + Cosine Similarity | Movie genre/feature similarity |
-| **Hybrid Fusion** | Weighted blend α·CF + (1-α)·CB | Best of both, with cold-start handling |
+![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python) ![Flask](https://img.shields.io/badge/Flask-3.x-green?logo=flask) ![ML](https://img.shields.io/badge/Algorithms-Ensemble%20%7C%20SGD%20%7C%20ALS%20%7C%20MMR-purple) ![License](https://img.shields.io/badge/License-MIT-orange)
 
 ---
 
-## Live Demo
+## 🌟 Overview & Core Engineering
 
-```bash
-# 1. Install dependencies
-pip install -r requirements.txt
-
-# 2. Train models (downloads dataset automatically)
-python src/main.py --no-plots
-
-# 3. Launch web app
-start_web.bat          # Windows
-# OR
-python web/app.py      # Any OS
-```
-
-Open **http://localhost:5000** — the full UI loads instantly.
+CineAI is an advanced **hybrid movie recommender system** designed to solve classic information retrieval and machine learning challenges in recommendation systems:
+*   **Cold Start Mitigation:** Incorporates dynamic demographic grouping and alpha weighting fallbacks when user profile sparsity is high.
+*   **Accuracy-Diversity Tradeoff:** Employs Maximal Marginal Relevance (MMR) to diversify list rankings and counter echo-chamber recommendations.
+*   **Algorithmic Auditing:** Audits popularity bias (Gini coefficients), demographically stratified evaluation (RMSE differences), and calibration checks.
+*   **Model Ensembling:** Blends Matrix Factorization trained via Stochastic Gradient Descent (SGD) and Alternating Least Squares (ALS) alongside TF-IDF Content-Based filtering.
 
 ---
 
-## Project Structure
+## 📦 Project Architecture
 
 ```
 movie_recommender_system/
 │
-├── src/                             # Core ML pipeline
-│   ├── data_loader.py               #   Download & preprocess MovieLens 100K
-│   ├── collaborative_filtering.py   #   Matrix Factorisation via SGD (NumPy)
-│   ├── content_based.py             #   TF-IDF genres + Cosine Similarity
-│   ├── hybrid_engine.py             #   Weighted fusion + cold-start handling
-│   ├── evaluator.py                 #   RMSE, MAE, Precision@K, Recall@K, ILD
-│   ├── utils.py                     #   Pretty printing & helpers
-│   └── main.py                      #   CLI pipeline entry point
+├── src/                             # Core ML & Recommendation Pipeline
+│   ├── data_loader.py               #   Dataset loading, demographic feature engineering
+│   ├── collaborative_filtering.py   #   SGD Matrix Factorization & ALS Matrix Factorization
+│   ├── content_based.py             #   TF-IDF Title/Genres vectorization + Cosine Similarity
+│   ├── hybrid_engine.py             #   Dynamic ensembling & MMR re-ranking
+│   ├── evaluator.py                 #   Advanced metrics (NDCG@K, MAP@K, HR@K, ILD, coverage)
+│   ├── tuner.py                     #   Random search Bayesian hyperparameter optimization
+│   ├── analysis.py                  #   Fairness, bias, calibration, & demographic audit engine
+│   └── main.py                      #   Unified CLI entrypoint for orchestrating pipelines
 │
-├── web/                             # Full-stack web application
-│   ├── app.py                       #   Flask REST API (12 endpoints)
-│   ├── templates/index.html         #   Dark-mode SPA (single-page app)
+├── web/                             # Full-Stack Web Application
+│   ├── app.py                       #   Flask REST API serving predictions & live audits
+│   ├── templates/index.html         #   Glassmorphism Single-Page Application (SPA) HTML5
 │   └── static/
-│       ├── css/style.css            #   Netflix-style dark UI
-│       └── js/app.js                #   Vanilla JS frontend logic
+│       ├── css/style.css            #   Netflix-style dark mode styling, skeleton animations
+│       └── js/app.js                #   Reactive SPA controller handling state & dynamic comparisons
 │
 ├── tests/
-│   └── test_recommender.py          # 31 pytest unit tests
+│   └── test_recommender.py          #   Pytest suite covering models, metrics, and tuning
 │
-├── data/processed/                  # Cleaned CSVs (auto-generated)
-├── models/saved/                    # Trained models — .pkl (auto-generated)
-├── outputs/plots/                   # Evaluation charts (auto-generated)
-│
-├── requirements.txt
-├── .gitignore
-├── start_web.bat                    # Windows: launch web server
-├── run.bat                          # Windows: run CLI pipeline
-└── run_tests.bat                    # Windows: run all tests
+├── requirements.txt                 #   Project dependencies
+├── start_web.bat                    #   Windows script to launch Flask web app
+├── run.bat                          #   Windows script to run the full training pipeline
+└── run_tests.bat                    #   Windows script to trigger test suite
 ```
 
 ---
 
-## API Endpoints
+## 🛠️ Installation & Getting Started
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | Web UI |
-| GET | `/health` | Server health check |
-| GET | `/api/stats` | Dataset statistics |
-| GET | `/api/popular?n=10` | Popularity-ranked movies |
-| GET | `/api/recommend/<user_id>?n=10&alpha=0.7` | **Hybrid** recommendations |
-| GET | `/api/cf/<user_id>?n=10` | Collaborative filtering only |
-| GET | `/api/cb/<user_id>?n=10` | Content-based only |
-| GET | `/api/similar/<movie_id>?n=10` | Similar movies |
-| GET | `/api/search?q=star&n=20` | Search by title |
-| GET | `/api/user/<user_id>/history` | User rating history |
-| GET | `/api/movies/<movie_id>` | Movie details + stats |
-| GET | `/api/users` | Top active users |
-
----
-
-## Model Performance
-
-| Metric | Value |
-|--------|-------|
-| Test RMSE | **0.9361** |
-| Test MAE | **0.7372** |
-| Precision@10 | **57.6%** |
-| Recall@10 | **71.4%** |
-| F1@10 | **63.8%** |
-| Intra-List Diversity | 0.210 |
-| Training time | ~14 seconds |
-| Test suite | **31 / 31 passed** |
-
----
-
-## How the Hybrid Engine Works
-
-```
-Rating Matrix R (users × movies)
-         ↓  Matrix Factorisation (SGD)
-R ≈ P · Qᵀ + bias_user + bias_item + global_mean
-
-Movie genres → TF-IDF vectors → Cosine Similarity matrix
-
-hybrid_score = α × norm(CF_predicted_rating)
-             + (1-α) × norm(CB_similarity_score)
-
-Cold-start: if user has < 10 ratings → α is scaled down
-            so content-based contributes more
+### 1. Clone & Setup Workspace
+Ensure Python 3.10+ is installed:
+```bash
+# Install required libraries
+pip install -r requirements.txt
 ```
 
----
-
-## Dataset
-
-**MovieLens 100K** — [GroupLens Research](https://grouplens.org/datasets/movielens/100k/)
-- 100,000 ratings · 943 users · 1,682 movies
-- Rating scale: 1–5 stars · Matrix sparsity: 93.7%
-- **Auto-downloaded** on first run — no manual download needed
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| ML Core | NumPy (custom SGD), scikit-learn (TF-IDF, cosine sim) |
-| Data | Pandas, Matplotlib, Seaborn |
-| Backend | Flask, joblib |
-| Frontend | Vanilla JS, CSS3 (dark mode, animations) |
-| Testing | pytest (31 tests) |
-| Dataset | MovieLens 100K (GroupLens) |
-
----
-
-## Running CLI Pipeline
+### 2. Run the Pipelines (CLI)
+The unified pipeline in `src/main.py` handles model training, parameter tuning, metric evaluation, and fairness analysis:
 
 ```bash
-# Full training + evaluation + plots
-set PYTHONIOENCODING=utf-8 && python src/main.py
+# Run full pipeline (Train, tune hyperparameters, audit fairness, write evaluation reports)
+python src/main.py --full
 
-# Fast re-run with saved models
-python src/main.py --skip-train --user 42
+# Train models and run evaluations on a specific user
+python src/main.py --user 42
 
-# Get movies similar to a title
-python src/main.py --movie "Star Wars" --skip-train
+# Execute Hyperparameter Optimization (Random Search Cross-Validation)
+python src/main.py --tune
 
-# Top movies for new user (no history)
-python src/main.py --new-user --skip-train
+# Audit system fairness, bias, and calibration errors
+python src/main.py --analyse
+```
 
-# Run tests
+### 3. Spin Up Web App
+```bash
+# Spin up Flask app
+python web/app.py
+```
+Open **[http://localhost:5000](http://localhost:5000)** in your browser.
+
+---
+
+## 📊 Evaluation & Metrics Glossary
+
+CineAI evaluates recommendation quality using multiple ranking and diversity metrics:
+
+*   **NDCG@K (Normalized Discounted Cumulative Gain):** Measures ranking quality, penalizing relevant items placed lower in recommendation lists.
+*   **MAP@K (Mean Average Precision):** Evaluates overall precision of recommendations up to cut-off point $K$.
+*   **Hit Rate@K:** Proportion of test items successfully predicted within the top $K$ suggestions.
+*   **ILD (Intra-List Diversity):** Average genre distance between recommended items to prevent lists from containing duplicate themes.
+*   **Catalogue Coverage:** Percentage of catalog movies recommended to at least one user to audit "rich-get-richer" effects.
+*   **Novelty Score:** Self-information based metric evaluating the surprise factor of suggestions.
+
+---
+
+## ⚖️ Fairness & Bias Auditing
+
+To ensure recommendations are fair and calibrated, the `analysis.py` module evaluates:
+
+1.  **Demographic Equity:** Stratified RMSE validation across age ranges and gender splits to check if the model favors specific demographic subsets.
+2.  **Popularity Domination (Gini Coefficient):** Computes inequality curves on movie recommendation frequencies, proving the effectiveness of popularity-penalty tuning.
+3.  **Calibration Discrepancy:** Segments predicted vs. actual user rating averages into buckets to check if the system misrepresents user expectations.
+
+---
+
+## 🔌 API Documentation
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| **GET** | `/api/stats` | Dataset statistics (counts, distributions) |
+| **GET** | `/api/popular?n=N` | Top $N$ popularity-ranked movies |
+| **GET** | `/api/recommend/<uid>?n=N&alpha=A` | Hybrid recommendations for user `uid` |
+| **GET** | `/api/cf/<uid>?n=N` | Collaborative filtering recommendations (SGD) |
+| **GET** | `/api/als/<uid>?n=N` | Collaborative filtering recommendations (ALS) |
+| **GET** | `/api/cb/<uid>?n=N` | Content-based recommendations (TF-IDF similarity) |
+| **GET** | `/api/compare/<uid>?n=N` | Side-by-side comparative list across all 4 modes |
+| **GET** | `/api/similar/<mid>?n=N` | Similar item retrieval using Cosine Similarity |
+| **GET** | `/api/user/<uid>/history` | Historical logs of rated movies for profile debugging |
+| **GET** | `/api/confidence?user=U&movie=M` | Bootstrap prediction uncertainty estimation & confidence interval |
+| **GET** | `/api/fairness` | System-wide demographic RMSE, Gini inequality, and calibration metrics |
+
+---
+
+## 🧪 Testing
+
+The project maintains a unit test suite testing recommendation logic, matrix factorization shapes, metrics calculation, and parameter optimization.
+
+```bash
+# Run tests via pytest
 python -m pytest tests/ -v
 ```
 
 ---
 
-*Built as a portfolio project demonstrating end-to-end ML engineering — from data preprocessing through model training, REST API design, and full-stack web development.*
+*CineAI was built as an end-to-end recommendation systems portfolio project, showcasing multi-model ensembling, algorithmic fairness auditing, statistical uncertainty estimation, and responsive UI layout design.*
