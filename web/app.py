@@ -93,18 +93,30 @@ def _load_models():
 
     log.info("Loading Collaborative Filtering (SGD) model ...")
     _cf = CollaborativeFilteringModel()
-    _cf.load()
+    try:
+        _cf.load()
+    except FileNotFoundError:
+        log.warning("CF-SGD model not found. Training on the fly...")
+        _cf.fit(_ratings)
+        _cf.save()
 
     log.info("Loading Collaborative Filtering (ALS) model ...")
     _als = ALSModel()
     try:
         _als.load()
     except FileNotFoundError:
-        log.warning("ALS model not found — ALS endpoints will use SGD fallback.")
-        _als = None
+        log.warning("ALS model not found. Training on the fly...")
+        _als.fit(_ratings)
+        _als.save()
 
     log.info("Loading Content-Based model ...")
-    _cb = ContentBasedModel.load_from_disk()
+    try:
+        _cb = ContentBasedModel.load_from_disk()
+    except FileNotFoundError:
+        log.warning("Content-Based model not found. Training on the fly...")
+        _cb = ContentBasedModel()
+        _cb.fit(_movies, _ratings)
+        _cb.save()
 
     log.info("Assembling Hybrid engine ...")
     _engine = HybridRecommender(alpha=0.7, cold_start_threshold=10, mmr_lambda=0.8)
@@ -573,4 +585,5 @@ def api_fairness():
 
 # ── Entry Point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
