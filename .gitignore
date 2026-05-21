@@ -16,7 +16,11 @@ env/
 .env/
 
 # Data (large files — download on first run)
-data/raw/
+data/raw/*
+!data/raw/ml-100k/
+!data/raw/ml-100k/u.data
+!data/raw/ml-100k/u.item
+!data/raw/ml-100k/u.user
 
 # Trained models (large binaries)
 models/saved/*.pkl

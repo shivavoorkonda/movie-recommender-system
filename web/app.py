@@ -76,62 +76,74 @@ _engine = None
 _user_features = None
 _movie_features = None
 _fairness_cache = None   # cached bias report
+_models_ready = False    # True once all models are loaded
 
 
 def _load_models():
     global _ratings, _movies, _users, _merged, _cf, _als, _cb, _engine
-    global _user_features, _movie_features
+    global _user_features, _movie_features, _models_ready
 
-    log.info("Loading dataset ...")
-    data     = load_all(verbose=False)
-    _ratings = data["ratings"]
-    _movies  = data["movies"]
-    _users   = data["users"]
-    _merged  = data["merged"]
-    _user_features  = data.get("user_features")
-    _movie_features = data.get("movie_features")
-
-    log.info("Loading Collaborative Filtering (SGD) model ...")
-    _cf = CollaborativeFilteringModel()
     try:
-        _cf.load()
-    except FileNotFoundError:
-        log.warning("CF-SGD model not found. Training on the fly...")
-        _cf.fit(_ratings)
-        _cf.save()
+        log.info("Loading dataset ...")
+        data     = load_all(verbose=False)
+        _ratings = data["ratings"]
+        _movies  = data["movies"]
+        _users   = data["users"]
+        _merged  = data["merged"]
+        _user_features  = data.get("user_features")
+        _movie_features = data.get("movie_features")
 
-    log.info("Loading Collaborative Filtering (ALS) model ...")
-    _als = ALSModel()
-    try:
-        _als.load()
-    except FileNotFoundError:
-        log.warning("ALS model not found. Training on the fly...")
-        _als.fit(_ratings)
-        _als.save()
+        log.info("Loading Collaborative Filtering (SGD) model ...")
+        _cf = CollaborativeFilteringModel()
+        try:
+            _cf.load()
+        except FileNotFoundError:
+            log.warning("CF-SGD model not found. Training on the fly...")
+            _cf.fit(_ratings)
+            _cf.save()
 
-    log.info("Loading Content-Based model ...")
-    try:
-        _cb = ContentBasedModel.load_from_disk()
-    except FileNotFoundError:
-        log.warning("Content-Based model not found. Training on the fly...")
-        _cb = ContentBasedModel()
-        _cb.fit(_movies, _ratings)
-        _cb.save()
+        log.info("Loading Collaborative Filtering (ALS) model ...")
+        _als = ALSModel()
+        try:
+            _als.load()
+        except FileNotFoundError:
+            log.warning("ALS model not found. Training on the fly...")
+            _als.fit(_ratings)
+            _als.save()
 
-    log.info("Assembling Hybrid engine ...")
-    _engine = HybridRecommender(alpha=0.7, cold_start_threshold=10, mmr_lambda=0.8)
-    _engine.set_models(_cf, _cb, _als)
+        log.info("Loading Content-Based model ...")
+        try:
+            _cb = ContentBasedModel.load_from_disk()
+        except FileNotFoundError:
+            log.warning("Content-Based model not found. Training on the fly...")
+            _cb = ContentBasedModel()
+            _cb.fit(_movies, _ratings)
+            _cb.save()
 
-    log.info("All models loaded successfully — server ready.")
+        log.info("Assembling Hybrid engine ...")
+        _engine = HybridRecommender(alpha=0.7, cold_start_threshold=10, mmr_lambda=0.8)
+        _engine.set_models(_cf, _cb, _als)
+
+        _models_ready = True
+        log.info("All models loaded successfully — server ready.")
+    except Exception:
+        log.exception("Failed to load models")
 
 
-_load_models()
+# Start model loading in a background thread so the server binds to the port
+# immediately. Render kills services that don't bind within ~60 seconds.
+import threading
+_loader_thread = threading.Thread(target=_load_models, daemon=True)
+_loader_thread.start()
 
 
 # ── Middleware ────────────────────────────────────────────────────────────────
 @app.before_request
 def _before():
     g.t0 = time.time()
+    if not _models_ready:
+        if request.path.startswith("/api/"):
+            return jsonify(error="Models are loading on the server, please try again shortly.", status="loading"), 503
 
 @app.after_request
 def _after(resp):
