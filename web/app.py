@@ -130,17 +130,27 @@ def _load_models():
         log.exception("Failed to load models")
 
 
-# Start model loading in a background thread so the server binds to the port
-# immediately. Render kills services that don't bind within ~60 seconds.
+# Lazily start the model loading thread in the active worker process. Under Gunicorn/uWSGI,
+# child worker processes are forked, meaning any threads started at import-time do not survive.
+# Starting the thread inside the request context guarantees it runs inside the active worker.
 import threading
-_loader_thread = threading.Thread(target=_load_models, daemon=True)
-_loader_thread.start()
+_loader_thread = None
+_loader_lock = threading.Lock()
 
 
 # ── Middleware ────────────────────────────────────────────────────────────────
 @app.before_request
 def _before():
+    global _loader_thread
     g.t0 = time.time()
+
+    if _loader_thread is None:
+        with _loader_lock:
+            if _loader_thread is None:
+                log.info("Lazy starting model loader thread inside the active worker process...")
+                _loader_thread = threading.Thread(target=_load_models, daemon=True)
+                _loader_thread.start()
+
     if not _models_ready:
         if request.path.startswith("/api/"):
             return jsonify(error="Models are loading on the server, please try again shortly.", status="loading"), 503
