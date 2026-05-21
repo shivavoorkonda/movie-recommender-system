@@ -1,7 +1,9 @@
 // app.js — CineAI Frontend SPA
 'use strict';
 
-const API = 'http://localhost:5000';   // explicitly set for VS Code Live Server compatibility
+const API = window.location.origin.includes('localhost') && !window.location.origin.includes('5000') 
+  ? 'http://localhost:5000' 
+  : window.location.origin; // Dynamically resolves to the correct host on Render and localhost
 
 // ── Genre → emoji + colour ─────────────────────────────────────────────────
 const GENRE_META = {
