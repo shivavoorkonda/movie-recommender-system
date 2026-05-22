@@ -1,8 +1,8 @@
 // app.js — CineAI Frontend SPA
 'use strict';
 
-const API = window.location.origin.includes('localhost') && !window.location.origin.includes('5000') 
-  ? 'http://localhost:5000' 
+const API = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1') || window.location.origin.startsWith('file:'))
+  ? (window.location.origin.includes('5000') ? window.location.origin : 'http://localhost:5000')
   : window.location.origin; // Dynamically resolves to the correct host on Render and localhost
 
 // ── Genre → emoji + colour ─────────────────────────────────────────────────
@@ -44,7 +44,7 @@ async function apiFetch(url) {
   const r = await fetch(API + url);
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
-    throw new Error(e.message || r.statusText);
+    throw new Error(e.error || e.message || r.statusText);
   }
   return r.json();
 }
