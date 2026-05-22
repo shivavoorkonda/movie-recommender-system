@@ -24,6 +24,9 @@ data/raw/*
 
 # Trained models (large binaries)
 models/saved/*.pkl
+!models/saved/cf_svd_model.pkl
+!models/saved/cf_als_model.pkl
+!models/saved/cb_model.pkl
 
 # Outputs (regenerated)
 outputs/
