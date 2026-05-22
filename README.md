@@ -80,7 +80,6 @@ python src/main.py --analyse
 # Spin up Flask app
 python web/app.py
 ```
-Open **[http://localhost:5000](http://localhost:5000)** in your browser.
 
 ---
 
