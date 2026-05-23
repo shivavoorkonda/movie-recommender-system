@@ -65,14 +65,13 @@ OCCUPATIONS = [
 
 def _download_movielens(verbose: bool = True) -> None:
     """Download & extract MovieLens 100K if not already present."""
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
-    zip_path = RAW_DIR / "ml-100k.zip"
-
     if ML100K_DIR.exists():
         if verbose:
             print(f"{Fore.GREEN}[DataLoader] MovieLens 100K already downloaded → {ML100K_DIR}")
         return
 
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
+    zip_path = RAW_DIR / "ml-100k.zip"
     if verbose:
         print(f"{Fore.CYAN}[DataLoader] Downloading MovieLens 100K from GroupLens …")
 

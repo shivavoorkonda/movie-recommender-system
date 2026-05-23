@@ -46,7 +46,7 @@ sys.path.insert(0, str(SRC))
 os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 os.environ.setdefault("PYTHONUTF8",       "1")
 
-from data_loader             import load_all
+from data_loader             import load_ratings, load_movies, load_users
 from collaborative_filtering import CollaborativeFilteringModel, ALSModel
 from content_based           import ContentBasedModel
 from hybrid_engine           import HybridRecommender
@@ -68,57 +68,40 @@ logging.basicConfig(
 log = logging.getLogger("cineai")
 
 # ── Globals (filled by _load_models) ──────────────────────────────────────────
-_ratings = _movies = _users = _merged = None
+_ratings = _movies = _users = None
 _cf  = None   # SGD model
 _als = None   # ALS model
 _cb  = None
 _engine = None
-_user_features = None
-_movie_features = None
 _fairness_cache = None   # cached bias report
 _models_ready = False    # True once all models are loaded
 
+import threading
+_loader_lock = threading.Lock()
+
 
 def _load_models():
-    global _ratings, _movies, _users, _merged, _cf, _als, _cb, _engine
-    global _user_features, _movie_features, _models_ready
+    """Load datasets (read-only) and pre-trained model weights from disk.
+    No filesystem writes — safe on Vercel/Lambda read-only environments."""
+    global _ratings, _movies, _users, _cf, _als, _cb, _engine, _models_ready
 
     try:
-        log.info("Loading dataset ...")
-        data     = load_all(verbose=False)
-        _ratings = data["ratings"]
-        _movies  = data["movies"]
-        _users   = data["users"]
-        _merged  = data["merged"]
-        _user_features  = data.get("user_features")
-        _movie_features = data.get("movie_features")
+        log.info("Loading dataset (read-only) ...")
+        _ratings = load_ratings(verbose=False)
+        _movies  = load_movies(verbose=False)
+        _users   = load_users(verbose=False)
+        log.info(f"Dataset loaded: {len(_ratings)} ratings, {len(_movies)} movies, {len(_users)} users")
 
         log.info("Loading Collaborative Filtering (SGD) model ...")
         _cf = CollaborativeFilteringModel()
-        try:
-            _cf.load()
-        except FileNotFoundError:
-            log.warning("CF-SGD model not found. Training on the fly...")
-            _cf.fit(_ratings)
-            _cf.save()
+        _cf.load()
 
         log.info("Loading Collaborative Filtering (ALS) model ...")
         _als = ALSModel()
-        try:
-            _als.load()
-        except FileNotFoundError:
-            log.warning("ALS model not found. Training on the fly...")
-            _als.fit(_ratings)
-            _als.save()
+        _als.load()
 
         log.info("Loading Content-Based model ...")
-        try:
-            _cb = ContentBasedModel.load_from_disk()
-        except FileNotFoundError:
-            log.warning("Content-Based model not found. Training on the fly...")
-            _cb = ContentBasedModel()
-            _cb.fit(_movies, _ratings)
-            _cb.save()
+        _cb = ContentBasedModel.load_from_disk()
 
         log.info("Assembling Hybrid engine ...")
         _engine = HybridRecommender(alpha=0.7, cold_start_threshold=10, mmr_lambda=0.8)
@@ -127,44 +110,24 @@ def _load_models():
         _models_ready = True
         log.info("All models loaded successfully — server ready.")
     except Exception:
-        log.exception("Failed to load models")
-
-
-# Lazily start the model loading thread in the active worker process. Under Gunicorn/uWSGI,
-# child worker processes are forked, meaning any threads started at import-time do not survive.
-# Starting the thread inside the request context guarantees it runs inside the active worker.
-import threading
-_loader_thread = None
-_loader_lock = threading.Lock()
+        log.exception("FATAL: Failed to load models")
 
 
 # ── Middleware ────────────────────────────────────────────────────────────────
 @app.before_request
 def _before():
-    global _loader_thread
     g.t0 = time.time()
 
-    # Vercel Serverless environment detection
-    IS_VERCEL = os.environ.get("VERCEL") == "1" or "AWS_LAMBDA_FUNCTION_NAME" in os.environ
+    # Synchronous model loading on first request (safe for all platforms)
+    if not _models_ready:
+        with _loader_lock:
+            if not _models_ready:
+                log.info("First request — loading models synchronously ...")
+                _load_models()
 
-    if IS_VERCEL:
-        if not _models_ready:
-            with _loader_lock:
-                if not _models_ready:
-                    log.info("Vercel environment detected. Loading models synchronously...")
-                    _load_models()
-    else:
-        # Standard Gunicorn/Render asynchronous background loading thread
-        if _loader_thread is None:
-            with _loader_lock:
-                if _loader_thread is None:
-                    log.info("Lazy starting model loader thread inside the active worker process...")
-                    _loader_thread = threading.Thread(target=_load_models, daemon=True)
-                    _loader_thread.start()
-
-        if not _models_ready:
-            if request.path.startswith("/api/"):
-                return jsonify(error="Models are loading on the server, please try again shortly.", status="loading"), 503
+    if not _models_ready:
+        if request.path.startswith("/api/"):
+            return jsonify(error="Models failed to load. Check server logs.", status="error"), 503
 
 @app.after_request
 def _after(resp):
