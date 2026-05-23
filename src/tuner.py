@@ -30,7 +30,10 @@ init(autoreset=True)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUTS_DIR  = PROJECT_ROOT / "outputs"
-OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass
 
 
 class HyperparamTuner:

@@ -70,24 +70,33 @@ def _download_movielens(verbose: bool = True) -> None:
             print(f"{Fore.GREEN}[DataLoader] MovieLens 100K already downloaded → {ML100K_DIR}")
         return
 
-    RAW_DIR.mkdir(parents=True, exist_ok=True)
-    zip_path = RAW_DIR / "ml-100k.zip"
-    if verbose:
-        print(f"{Fore.CYAN}[DataLoader] Downloading MovieLens 100K from GroupLens …")
+    try:
+        RAW_DIR.mkdir(parents=True, exist_ok=True)
+        zip_path = RAW_DIR / "ml-100k.zip"
+        if verbose:
+            print(f"{Fore.CYAN}[DataLoader] Downloading MovieLens 100K from GroupLens …")
 
-    resp  = requests.get(ML100K_URL, stream=True, timeout=60)
-    total = int(resp.headers.get("content-length", 0))
-    with open(zip_path, "wb") as f, tqdm(total=total, unit="B", unit_scale=True,
-                                          desc="ml-100k.zip") as bar:
-        for chunk in resp.iter_content(chunk_size=8192):
-            f.write(chunk)
-            bar.update(len(chunk))
+        resp  = requests.get(ML100K_URL, stream=True, timeout=60)
+        total = int(resp.headers.get("content-length", 0))
+        with open(zip_path, "wb") as f, tqdm(total=total, unit="B", unit_scale=True,
+                                              desc="ml-100k.zip") as bar:
+            for chunk in resp.iter_content(chunk_size=8192):
+                f.write(chunk)
+                bar.update(len(chunk))
 
-    with zipfile.ZipFile(zip_path, "r") as z:
-        z.extractall(RAW_DIR)
+        with zipfile.ZipFile(zip_path, "r") as z:
+            z.extractall(RAW_DIR)
 
-    zip_path.unlink()
-    print(f"{Fore.GREEN}[DataLoader] Extracted → {ML100K_DIR}")
+        zip_path.unlink()
+        print(f"{Fore.GREEN}[DataLoader] Extracted → {ML100K_DIR}")
+    except (PermissionError, OSError) as e:
+        print(f"{Fore.YELLOW}[DataLoader] WARNING: Could not download/extract dataset due to read-only filesystem: {e}")
+        print(f"{Fore.YELLOW}[DataLoader] Make sure raw dataset files under 'data/raw/ml-100k/' are fully bundled in your deployment.")
+        if not ML100K_DIR.exists():
+            raise FileNotFoundError(
+                f"Dataset files are missing at '{ML100K_DIR}' and cannot be downloaded "
+                f"because the filesystem is read-only (e.g. Vercel/Lambda)."
+            ) from e
 
 
 def load_ratings(verbose: bool = True) -> pd.DataFrame:

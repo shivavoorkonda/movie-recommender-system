@@ -46,7 +46,10 @@ init(autoreset=True)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PLOT_DIR     = PROJECT_ROOT / "outputs" / "plots"
-PLOT_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    PLOT_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass
 
 # ── Plot style ─────────────────────────────────────────────────────────────────
 plt.rcParams.update({
