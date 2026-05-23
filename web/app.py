@@ -144,16 +144,27 @@ def _before():
     global _loader_thread
     g.t0 = time.time()
 
-    if _loader_thread is None:
-        with _loader_lock:
-            if _loader_thread is None:
-                log.info("Lazy starting model loader thread inside the active worker process...")
-                _loader_thread = threading.Thread(target=_load_models, daemon=True)
-                _loader_thread.start()
+    # Vercel Serverless environment detection
+    IS_VERCEL = os.environ.get("VERCEL") == "1" or "AWS_LAMBDA_FUNCTION_NAME" in os.environ
 
-    if not _models_ready:
-        if request.path.startswith("/api/"):
-            return jsonify(error="Models are loading on the server, please try again shortly.", status="loading"), 503
+    if IS_VERCEL:
+        if not _models_ready:
+            with _loader_lock:
+                if not _models_ready:
+                    log.info("Vercel environment detected. Loading models synchronously...")
+                    _load_models()
+    else:
+        # Standard Gunicorn/Render asynchronous background loading thread
+        if _loader_thread is None:
+            with _loader_lock:
+                if _loader_thread is None:
+                    log.info("Lazy starting model loader thread inside the active worker process...")
+                    _loader_thread = threading.Thread(target=_load_models, daemon=True)
+                    _loader_thread.start()
+
+        if not _models_ready:
+            if request.path.startswith("/api/"):
+                return jsonify(error="Models are loading on the server, please try again shortly.", status="loading"), 503
 
 @app.after_request
 def _after(resp):
