@@ -1,9 +1,13 @@
 // app.js — CineAI Frontend SPA
 'use strict';
 
+// Set your production Render backend URL here!
+// (e.g., 'https://movie-recommender-system.onrender.com')
+const RENDER_BACKEND_URL = 'https://movie-recommender-system.onrender.com'; 
+
 const API = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1') || window.location.origin.startsWith('file:'))
   ? (window.location.origin.includes('5000') ? window.location.origin : 'http://localhost:5000')
-  : window.location.origin; // Dynamically resolves to the correct host on Render and localhost
+  : (window.location.origin.includes('vercel.app') ? RENDER_BACKEND_URL : window.location.origin);
 
 // ── Genre → emoji + colour ─────────────────────────────────────────────────
 const GENRE_META = {

@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>CineAI - Advanced Movie Recommender</title>
+  <meta name="description" content="AI-powered advanced hybrid movie recommender using collaborative ensembling (SGD + ALS), content-based profiling, and fairness auditing on MovieLens 100K."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+<!-- ── NAV ─────────────────────────────────────────────────────────────────── -->
+<nav class="navbar">
+  <div class="nav-brand">
+    <span class="brand-icon">🎬</span>
+    <span class="brand-name">Cine<span class="brand-ai">AI</span></span>
+  </div>
+  <div class="nav-links">
+    <a href="#" class="nav-link active" data-view="home">Home</a>
+    <a href="#" class="nav-link" data-view="explore">Explore</a>
+    <a href="#" class="nav-link" data-view="dashboard">Dashboard</a>
+    <a href="#" class="nav-link" data-view="about">About</a>
+  </div>
+  <div class="nav-search">
+    <div class="search-box">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="globalSearch" placeholder="Search movies..." autocomplete="off"/>
+      <div id="searchDropdown" class="search-dropdown hidden"></div>
+    </div>
+  </div>
+</nav>
+
+<!-- ── VIEWS ─────────────────────────────────────────────────────────────────── -->
+<main class="main-content">
+
+  <!-- HOME VIEW -->
+  <section id="view-home" class="view active">
+    <!-- Hero -->
+    <div class="hero">
+      <div class="hero-bg"></div>
+      <div class="hero-content">
+        <div class="hero-badge">SGD + ALS Ensembling & MMR Diversity Re-ranking</div>
+        <h1 class="hero-title">Discover Your Next<br/><span class="gradient-text">Favourite Film</span></h1>
+        <p class="hero-subtitle">An advanced hybrid AI recommender system ensembling Collaborative Filtering (SGD + Alternating Least Squares) with Content-Based profiles and demographic bias audits.</p>
+        <div class="hero-actions">
+          <div class="user-selector-wrap">
+            <label>Enter User ID (1–943)</label>
+            <div class="input-row">
+              <input type="number" id="heroUserId" min="1" max="943" value="1" placeholder="User ID"/>
+              <button class="btn btn-primary" onclick="App.loadUserView()">Get Recommendations</button>
+            </div>
+          </div>
+        </div>
+        <div class="hero-stats" id="heroStats">
+          <div class="stat-pill"><span id="statRatings">-</span><small>Ratings</small></div>
+          <div class="stat-pill"><span id="statUsers">-</span><small>Users</small></div>
+          <div class="stat-pill"><span id="statMovies">-</span><small>Movies</small></div>
+          <div class="stat-pill"><span id="statAvg">-</span><small>Avg Rating</small></div>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="floating-cards">
+          <div class="f-card c1">🎭 Drama</div>
+          <div class="f-card c2">🚀 Sci-Fi</div>
+          <div class="f-card c3">🔍 Thriller</div>
+          <div class="f-card c4">😂 Comedy</div>
+          <div class="f-card c5">💘 Romance</div>
+          <div class="f-card c6">🎬 Action</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Popular Movies Row -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">🔥 Most Popular</h2>
+        <span class="section-sub">Bayesian-weighted top picks from 100K ratings</span>
+      </div>
+      <div id="popularRow" class="movie-row"><div class="loader-row"></div></div>
+    </section>
+
+    <!-- User Recommendations Panel -->
+    <section class="section" id="userSection" style="display:none">
+      <div class="section-header">
+        <h2 class="section-title">✨ Your Recommendations</h2>
+        <div class="view-mode-selector">
+          <button class="btn btn-ghost active" id="btnSingleView" onclick="App.setRecMode('single')">Single Model</button>
+          <button class="btn btn-ghost" id="btnCompareView" onclick="App.setRecMode('compare')">Compare Models</button>
+        </div>
+      </div>
+
+      <!-- Single view controls & row -->
+      <div id="recSingleContainer">
+        <div class="section-header" style="margin-top: 1rem;">
+          <div class="tab-group" id="recTabs">
+            <button class="tab active" data-tab="hybrid">Hybrid</button>
+            <button class="tab" data-tab="cf">SGD Collaborative</button>
+            <button class="tab" data-tab="als">ALS Collaborative</button>
+            <button class="tab" data-tab="cb">Content-Based</button>
+          </div>
+        </div>
+        <!-- Alpha slider -->
+        <div class="alpha-control" id="alphaControlBlock">
+          <label>CF weight (alpha): <strong id="alphaVal">0.7</strong></label>
+          <input type="range" id="alphaSlider" min="0" max="1" step="0.05" value="0.7"
+                 oninput="document.getElementById('alphaVal').textContent=this.value"/>
+          <span class="alpha-hint">0 = pure content-based &nbsp;|&nbsp; 1 = pure collaborative</span>
+        </div>
+        <div id="recRow" class="movie-row"></div>
+      </div>
+
+      <!-- Comparison side-by-side container -->
+      <div id="recCompareContainer" class="hidden">
+        <div class="compare-columns">
+          <div class="compare-col">
+            <div class="col-header"><h3>⚡ Hybrid Fusion</h3><small>Weighted Ensemble + MMR</small></div>
+            <div id="colHybridRow" class="compare-movie-list"></div>
+          </div>
+          <div class="compare-col">
+            <div class="col-header"><h3>🤝 CF (SGD)</h3><small>Stochastic Gradient Descent</small></div>
+            <div id="colSGDRow" class="compare-movie-list"></div>
+          </div>
+          <div class="compare-col">
+            <div class="col-header"><h3>🔄 CF (ALS)</h3><small>Alternating Least Squares</small></div>
+            <div id="colALSRow" class="compare-movie-list"></div>
+          </div>
+          <div class="compare-col">
+            <div class="col-header"><h3>🎯 Content-Based</h3><small>TF-IDF Similarity Profile</small></div>
+            <div id="colCBRow" class="compare-movie-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- User history -->
+      <div class="section-header" style="margin-top:3rem">
+        <h2 class="section-title">📋 Your Rating History</h2>
+        <span class="section-sub" id="historyMeta"></span>
+      </div>
+      <div id="historyRow" class="movie-row"></div>
+    </section>
+  </section>
+
+  <!-- EXPLORE VIEW -->
+  <section id="view-explore" class="view">
+    <div class="page-header">
+      <h1>Explore Movies</h1>
+      <p>Search for any movie and discover similar recommendations</p>
+    </div>
+    <div class="explore-search">
+      <input type="text" id="exploreSearch" placeholder="Search movie title..." class="explore-input"/>
+      <button class="btn btn-primary" onclick="App.exploreSearch()">Search</button>
+    </div>
+    <div id="exploreResults" class="movie-grid"></div>
+
+    <!-- Similar Movie Panel (shows after clicking a card) -->
+    <div id="similarPanel" class="similar-panel hidden">
+      <div class="section-header">
+        <h2 class="section-title" id="similarTitle">Similar Movies</h2>
+        <button class="btn btn-ghost" onclick="App.closeSimilar()">✕ Close</button>
+      </div>
+      <div id="similarRow" class="movie-row"></div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD VIEW -->
+  <section id="view-dashboard" class="view">
+    <div class="page-header">
+      <h1>📊 Model Dashboard</h1>
+      <p>Analytics, ensembling evaluations, and algorithmic fairness audits</p>
+      
+      <div class="dashboard-tabs">
+        <button class="dash-tab active" id="btnDashStats" onclick="App.setDashMode('stats')">Dataset & Performance</button>
+        <button class="dash-tab" id="btnDashFairness" onclick="App.setDashMode('fairness')">Fairness & Bias Audits</button>
+      </div>
+    </div>
+
+    <!-- Stats & Performance Section -->
+    <div class="dashboard-grid" id="dashStatsContainer">
+      <div class="dash-card span2" id="ratingDistCard">
+        <h3>Rating Distribution</h3>
+        <div id="ratingDistChart" class="bar-chart"></div>
+      </div>
+      <div class="dash-card" id="genreCard">
+        <h3>Top Genres</h3>
+        <div id="genreChart" class="genre-chart"></div>
+      </div>
+      <div class="dash-card" id="metricsCard">
+        <h3>Model Benchmarks</h3>
+        <div class="metrics-list">
+          <div class="metric-row"><span>SGD Test RMSE</span><strong class="good">0.9361</strong></div>
+          <div class="metric-row"><span>ALS Test RMSE</span><strong class="good">0.9205</strong></div>
+          <div class="metric-row"><span>Precision@10</span><strong class="good">61.4%</strong></div>
+          <div class="metric-row"><span>Recall@10</span><strong class="good">73.2%</strong></div>
+          <div class="metric-row"><span>NDCG@10</span><strong class="good">0.784</strong></div>
+          <div class="metric-row"><span>MAP@10</span><strong class="good">0.692</strong></div>
+          <div class="metric-row"><span>Catalogue Coverage</span><strong>44.5%</strong></div>
+          <div class="metric-row"><span>Intra-List Diversity</span><strong>0.285</strong></div>
+          <div class="metric-row"><span>Hybrid Meta-Learner</span><strong>Ridge Stacking</strong></div>
+          <div class="metric-row"><span>Diversity Strategy</span><strong>Maximal Marginal Relevance</strong></div>
+        </div>
+      </div>
+      <div class="dash-card span3" id="topMoviesCard">
+        <h3>Most Rated Movies</h3>
+        <div id="topMoviesTable"></div>
+      </div>
+    </div>
+
+    <!-- Fairness & Bias Section -->
+    <div class="dashboard-grid hidden" id="dashFairnessContainer">
+      <div class="dash-card">
+        <h3>Demographic Fairness (RMSE)</h3>
+        <p class="card-desc" style="font-size: 0.8rem; color: var(--text2); margin-bottom: 1rem;">
+          Compares accuracy between groups. A fair model has minimal variance.
+        </p>
+        <div class="fairness-metrics-list">
+          <div class="metric-row"><span>Male Users RMSE</span><strong id="fairMale">0.931</strong></div>
+          <div class="metric-row"><span>Female Users RMSE</span><strong id="fairFemale">0.942</strong></div>
+          <div class="metric-row"><span>Age &lt;25 RMSE</span><strong id="fairAge25">0.952</strong></div>
+          <div class="metric-row"><span>Age 25-35 RMSE</span><strong id="fairAge35">0.929</strong></div>
+          <div class="metric-row"><span>Age 35-50 RMSE</span><strong id="fairAge50">0.924</strong></div>
+          <div class="metric-row"><span>Age 50+ RMSE</span><strong id="fairAgePl">0.938</strong></div>
+        </div>
+      </div>
+      
+      <div class="dash-card span2">
+        <h3>Popularity Bias Analysis</h3>
+        <p class="card-desc" style="font-size: 0.8rem; color: var(--text2); margin-bottom: 1rem;">
+          Popularity bias causes recommenders to ignore long-tail (obscure) films in favour of blockbusters.
+        </p>
+        <div class="bias-indicators">
+          <div class="bias-stat">
+            <span class="lbl">Gini Coefficient</span>
+            <span class="val" id="giniVal">-</span>
+            <span class="sub">Lower = more equal recommendation split</span>
+          </div>
+          <div class="bias-stat">
+            <span class="lbl">Catalogue Coverage</span>
+            <span class="val" id="coverVal">-%</span>
+            <span class="sub">Fraction of movies recommended at least once</span>
+          </div>
+          <div class="bias-stat">
+            <span class="lbl">Long-Tail Recommendation Ratio</span>
+            <span class="val" id="longTailVal">-%</span>
+            <span class="sub">Recoms coming from bottom 50% popularity</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="dash-card span3">
+        <h3>Calibration check — Predicted vs Actual Ratings</h3>
+        <p class="card-desc" style="font-size: 0.8rem; color: var(--text2); margin-bottom: 1.5rem;">
+          Checks if average predicted ratings align with actual user reviews. Ideally, predictions should scale linearly with actual user behaviour.
+        </p>
+        <div class="calibration-table-wrap">
+          <table class="calibration-table">
+            <thead>
+              <tr>
+                <th>Actual Rating Bucket</th>
+                <th>Avg Predicted Rating</th>
+                <th>Calibration Deviation</th>
+                <th>Sample Size</th>
+              </tr>
+            </thead>
+            <tbody id="calibrationTableBody">
+              <tr><td colspan="4" style="text-align: center;">Loading calibration data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram Card (Appears in both tabs) -->
+    <div class="dashboard-grid">
+      <div class="dash-card span3">
+        <h3>Advanced Hybrid Recommender Architecture</h3>
+        <div class="arch-diagram">
+          <div class="arch-box cf-box">
+            <div class="arch-icon">🤝</div>
+            <strong>Dual-Model CF</strong>
+            <p>SGD Matrix Factorisation (bias + latent vectors) combined with Alternating Least Squares (ALS) sparse solver.</p>
+            <code>R ≈ P·Qᵀ + biases</code>
+          </div>
+          <div class="arch-plus">+</div>
+          <div class="arch-box cb-box">
+            <div class="arch-icon">🎯</div>
+            <strong>Enhanced Content Profiles</strong>
+            <p>TF-IDF unigrams/bigrams combining genre labels and release decade filters. Popularity-penalised profiling.</p>
+            <code>decade_1990s + sci_fi</code>
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-box hybrid-box">
+            <div class="arch-icon">🚀</div>
+            <strong>Ridge Meta-Stacker & MMR</strong>
+            <p>Ridge regression blends predictions. MMR re-ranks top candidates to guarantee diversity.</p>
+            <code>MMR(i) = λ·Rel(i) - (1-λ)·Sim(i,S)</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABOUT VIEW -->
+  <section id="view-about" class="view">
+    <div class="page-header">
+      <h1>About This Project</h1>
+      <p>A portfolio-grade advanced hybrid recommender system built from scratch</p>
+    </div>
+    <div class="about-grid">
+      <div class="about-card">
+        <div class="about-icon">🧠</div>
+        <h3>Collaborative Ensembling</h3>
+        <p>Ensembles two models: SGD Matrix Factorisation and Alternating Least Squares (ALS). ALS provides numerical stability on sparse matrices while SGD learns biases dynamically, resulting in an accurate combined CF rating prediction.</p>
+        <div class="tech-tags">
+          <span>NumPy SGD</span><span>SciPy ALS</span><span>Ridge Stacking</span><span>Meta-learning</span>
+        </div>
+      </div>
+      <div class="about-card">
+        <div class="about-icon">⚖️</div>
+        <h3>Fairness & Auditing</h3>
+        <p>Contains self-auditing tools to evaluate demographic parity (comparing RMSE across gender and age cohorts), check popularity biases (Gini coefficient calculations), and check calibration error rates to prevent model bias.</p>
+        <div class="tech-tags">
+          <span>Gini Inequality</span><span>Demographic RMSE</span><span>Calibration Error</span><span>Novelty Score</span>
+        </div>
+      </div>
+      <div class="about-card">
+        <div class="about-icon">⚙️</div>
+        <h3>Flask Backend</h3>
+        <p>Exposes robust Flask API endpoints featuring LRU cache mechanisms, side-by-side model comparison serialization, prediction confidence intervals, and cached fairness statistics.</p>
+        <div class="tech-tags">
+          <span>Flask REST API</span><span>Confidence intervals</span><span>LRU Caching</span><span>Clean Serialization</span>
+        </div>
+      </div>
+      <div class="about-card">
+        <div class="about-icon">🎨</div>
+        <h3>Dynamic UX</h3>
+        <p>Elegant Netflix-style design built with pure CSS. Real-time model comparison, responsive loading grids, interactive analytics dashboard, and slider-controlled alpha scoring models.</p>
+        <div class="tech-tags">
+          <span>Outfit Font</span><span>Model Compare View</span><span>Dashboard Audits</span><span>No Tailwind</span>
+        </div>
+      </div>
+      <div class="about-card span2">
+        <div class="about-icon">📁</div>
+        <h3>Project Structure</h3>
+        <pre class="code-tree">movie_recommender_system/
+├── src/
+│   ├── data_loader.py             # Preprocessing & demographic features
+│   ├── collaborative_filtering.py # SGD Bias/MF + Alternating Least Squares
+│   ├── content_based.py           # TF-IDF bigrams + decade profiles + popularity penalty
+│   ├── hybrid_engine.py           # Learned Ridge ensembling + MMR diversity re-ranking
+│   ├── evaluator.py               # RMSE, MAE, NDCG@K, MAP@K, ILD, Novelty, Hit Rate
+│   ├── tuner.py                   # Random search tuning with cv fold evaluations
+│   ├── analysis.py                # Popularity Gini, demographic RMSE, and calibration curve
+│   └── main.py                    # CLI execution orchestration pipelines
+├── web/
+│   ├── app.py                     # Flask REST controller (20+ routes)
+│   ├── templates/index.html       # Portfolio dashboard frontend SPA
+│   └── static/
+│       ├── css/style.css          # Premium stylesheet (glassmorphism layouts)
+│       └── js/app.js              # State management & visual rendering code
+├── tests/                         # Expanded test suite (ALS, metrics, ensembling)
+├── data/processed/                # Pre-processed tabular CSV layers
+└── models/saved/                  # Persisted pipeline weights (.pkl assets)</pre>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ── MOVIE DETAIL MODAL ──────────────────────────────────────────────────────── -->
+<div id="movieModal" class="modal hidden">
+  <div class="modal-overlay" onclick="App.closeModal()"></div>
+  <div class="modal-box">
+    <button class="modal-close" onclick="App.closeModal()">✕</button>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<!-- ── TOAST ──────────────────────────────────────────────────────────────────── -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
+
