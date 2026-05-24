@@ -76,8 +76,6 @@ _engine = None
 _fairness_cache = None   # cached bias report
 _models_ready = False    # True once all models are loaded
 
-import threading
-_loader_lock = threading.Lock()
 
 
 def _load_models():
@@ -113,30 +111,24 @@ def _load_models():
         log.exception("FATAL: Failed to load models")
 
 
+# ── Load models eagerly at startup (runs when Gunicorn imports this module) ──
+log.info("Starting eager model loading at import time ...")
+_load_models()
+
+
 # ── Middleware ────────────────────────────────────────────────────────────────
 @app.before_request
 def _before():
     g.t0 = time.time()
 
-    # Skip model loading for health checks, homepage, and static assets
-    if request.path in ["/health", "/"] or not request.path.startswith("/api/"):
-        return
-
-    # Synchronous model loading on first request (safe for all platforms)
-    if not _models_ready:
-        with _loader_lock:
-            if not _models_ready:
-                log.info("First request — loading models synchronously ...")
-                _load_models()
-
-    if not _models_ready:
-        if request.path.startswith("/api/"):
-            return jsonify(error="Models failed to load. Check server logs.", status="error"), 503
+    if not _models_ready and request.path.startswith("/api/"):
+        return jsonify(error="Models failed to load. Check server logs.", status="error"), 503
 
 @app.after_request
 def _after(resp):
     resp.headers["Access-Control-Allow-Origin"]  = "*"
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     ms = (time.time() - g.t0) * 1000
     log.info(f"{request.method} {request.path} → {resp.status_code} ({ms:.0f}ms)")
     return resp
