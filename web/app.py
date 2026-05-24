@@ -118,6 +118,10 @@ def _load_models():
 def _before():
     g.t0 = time.time()
 
+    # Skip model loading for health checks, homepage, and static assets
+    if request.path in ["/health", "/"] or not request.path.startswith("/api/"):
+        return
+
     # Synchronous model loading on first request (safe for all platforms)
     if not _models_ready:
         with _loader_lock:
