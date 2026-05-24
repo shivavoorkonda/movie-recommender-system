@@ -22,6 +22,12 @@
     <a href="#" class="nav-link" data-view="explore">Explore</a>
     <a href="#" class="nav-link" data-view="dashboard">Dashboard</a>
     <a href="#" class="nav-link" data-view="about">About</a>
+    <button class="nav-link btn-settings" id="settings-btn" onclick="App.openSettings()" aria-label="Open connection settings" style="background: none; border: none; display: flex; align-items: center; justify-content: center; padding: 0.4rem 0.6rem; cursor: pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.3s;">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+    </button>
   </div>
   <div class="nav-search">
     <div class="search-box">
@@ -374,6 +380,30 @@
   <div class="modal-box">
     <button class="modal-close" onclick="App.closeModal()">✕</button>
     <div id="modalContent"></div>
+  </div>
+</div>
+
+<!-- ── SETTINGS MODAL ────────────────────────────────────────────────────────── -->
+<div id="settingsModal" class="modal hidden">
+  <div class="modal-overlay" onclick="App.closeSettings()"></div>
+  <div class="modal-box" style="background: var(--bg2); border-color: var(--border);">
+    <button class="modal-close" onclick="App.closeSettings()">✕</button>
+    <h3 class="modal-title" style="margin-bottom: 0.5rem; font-size: 1.25rem;">⚙️ Connection Settings</h3>
+    <p class="modal-genres" style="color: var(--text2); margin-bottom: 1.5rem; font-size: 0.8rem; line-height: 1.4;">
+      Configure the remote backend API server URL. Use this to link your Vercel static frontend to your hosted Render Flask backend service.
+    </p>
+    
+    <div class="input-row" style="flex-direction: column; gap: 0.5rem; width: 100%; margin-bottom: 1.5rem;">
+      <label style="font-size: 0.8rem; color: var(--text2); font-weight: 500;">Backend API Base URL</label>
+      <input type="url" id="apiUrlInput" placeholder="https://your-service.onrender.com" style="width: 100%; padding: 0.75rem 1rem; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; color: var(--text);" autocomplete="off"/>
+    </div>
+
+    <div style="display: flex; gap: 0.75rem;">
+      <button class="btn btn-ghost" id="btnTestConnection" onclick="App.testAPIConnection()" style="flex: 1; padding: 0.7rem;">Test Connection</button>
+      <button class="btn btn-primary" onclick="App.saveConnectionSettings()" style="flex: 1; padding: 0.7rem;">Save Settings</button>
+    </div>
+
+    <div id="settingsConnectionStatus"></div>
   </div>
 </div>
 

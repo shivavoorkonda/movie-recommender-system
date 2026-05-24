@@ -3,9 +3,9 @@
 
 // Set your production Render backend URL here!
 // (e.g., 'https://movie-recommender-system.onrender.com')
-const RENDER_BACKEND_URL = 'https://cineai-backend-f3sc.onrender.com'; 
+let RENDER_BACKEND_URL = localStorage.getItem('CINEAI_BACKEND_URL') || 'https://cineai-backend-f3sc.onrender.com'; 
 
-const API = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1') || window.location.origin.startsWith('file:'))
+let API = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1') || window.location.origin.startsWith('file:'))
   ? (window.location.origin.includes('5000') ? window.location.origin : 'http://localhost:5000')
   : (window.location.origin.includes('vercel.app') ? RENDER_BACKEND_URL : window.location.origin);
 
@@ -685,6 +685,124 @@ const App = {
       this.loadRecommendations(this.currentUser, 'hybrid');
     }
   },
+
+  // ── Connection Settings Modal ────────────────────────────────────────────
+  openSettings() {
+    const modal = document.getElementById('settingsModal');
+    const input = document.getElementById('apiUrlInput');
+    const statusContainer = document.getElementById('settingsConnectionStatus');
+    
+    statusContainer.innerHTML = ''; // Clear previous status
+    input.value = RENDER_BACKEND_URL;
+    modal.classList.remove('hidden');
+    
+    // Prevent body scrolling
+    document.body.style.overflow = 'hidden';
+  },
+
+  closeSettings() {
+    const modal = document.getElementById('settingsModal');
+    modal.classList.add('hidden');
+    
+    // Re-enable body scrolling
+    document.body.style.overflow = '';
+  },
+
+  saveConnectionSettings() {
+    const input = document.getElementById('apiUrlInput');
+    let url = input.value.trim();
+    
+    // Strip trailing slash if present
+    if (url.endsWith('/')) {
+      url = url.slice(0, -1);
+    }
+    
+    if (!url) {
+      alert('API Base URL cannot be empty.');
+      return;
+    }
+    
+    RENDER_BACKEND_URL = url;
+    localStorage.setItem('CINEAI_BACKEND_URL', url);
+    
+    // Update active API url
+    API = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1') || window.location.origin.startsWith('file:'))
+      ? (window.location.origin.includes('5000') ? window.location.origin : 'http://localhost:5000')
+      : url;
+
+    this.closeSettings();
+    toast('API Connection settings saved!');
+    
+    // Try reloading stats
+    this.loadStats();
+    this.loadPopular();
+    if (this.currentUser) {
+      this.loadRecommendations(this.currentUser, this.currentTab);
+      this.loadHistory(this.currentUser);
+    }
+  },
+
+  async testAPIConnection() {
+    const input = document.getElementById('apiUrlInput');
+    let url = input.value.trim();
+    const statusContainer = document.getElementById('settingsConnectionStatus');
+    const testBtn = document.getElementById('btnTestConnection');
+    
+    if (url.endsWith('/')) {
+      url = url.slice(0, -1);
+    }
+    
+    if (!url) {
+      statusContainer.innerHTML = `<div class="toast" style="position:static; margin-top:1rem; border-color:var(--accent2); color:var(--accent2);">URL cannot be empty</div>`;
+      return;
+    }
+
+    testBtn.disabled = true;
+    statusContainer.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px; margin-top:1rem; font-size:0.85rem; color:var(--text2);">
+        <div class="spinner" style="width:16px; height:16px; border-width:2px; margin:0;"></div>
+        Testing connection to ${url}...
+      </div>
+    `;
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+      
+      const res = await fetch(`${url}/health`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      
+      const data = await res.json();
+      const datasetLoaded = data.dataset && data.dataset.ratings > 0;
+      
+      if (datasetLoaded) {
+        statusContainer.innerHTML = `
+          <div style="margin-top:1rem; font-size:0.85rem; color:var(--green); font-weight:600;">
+            🟢 Connected! Server live with ${data.dataset.ratings.toLocaleString()} ratings loaded.
+          </div>
+        `;
+      } else {
+        statusContainer.innerHTML = `
+          <div style="margin-top:1rem; font-size:0.85rem; color:var(--accent2); font-weight:600;">
+            🟡 Connected to backend, but dataset is not loaded yet. Check server weights.
+          </div>
+        `;
+      }
+    } catch (err) {
+      console.error('Connection test failed:', err);
+      statusContainer.innerHTML = `
+        <div style="margin-top:1rem; font-size:0.85rem; color:var(--accent2); font-weight:600;">
+          🔴 Connection failed. Ensure server is running and CORS is enabled. Error: ${err.message}
+        </div>
+      `;
+    } finally {
+      testBtn.disabled = false;
+    }
+  }
 };
 
 // Alpha slider live apply on mouseup

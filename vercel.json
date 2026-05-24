@@ -1,21 +1,9 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python",
-      "config": {
-        "includeFiles": [
-          "data/raw/ml-100k/**",
-          "models/saved/**"
-        ]
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "api/index.py"
-    }
+  "public": true,
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/static/(.*)", "destination": "/web/static/$1" },
+    { "source": "/(.*)", "destination": "/web/templates/index.html" }
   ]
 }
