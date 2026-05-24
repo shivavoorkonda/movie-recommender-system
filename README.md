@@ -6,6 +6,14 @@
 
 ---
 
+## 🌐 Live Production Deployment
+
+The project is deployed across a high-performance **Split Architecture**:
+*   🎨 **Interactive Frontend SPA (Vercel):** [https://movie-recommender-system-delta-rouge.vercel.app/](https://movie-recommender-system-delta-rouge.vercel.app/)
+*   🧠 **Advanced REST API Backend (Render):** [https://cineai-backend-f3sc.onrender.com](https://cineai-backend-f3sc.onrender.com)
+
+---
+
 ## 🌟 Overview & Core Engineering
 
 CineAI is an advanced **hybrid movie recommender system** designed to solve classic information retrieval and machine learning challenges in recommendation systems:
